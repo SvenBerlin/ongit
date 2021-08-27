@@ -172,47 +172,133 @@ class keithley6485:
     
             
 if __name__ == '__main__':
+
+    import cv2
+    import numpy as np
     
-    k1 = keithley6485(port='COM11')
-    k1.connect()
-    k1.setUp('CURR')
+    def trigger():
+        width=1920
+        height=1080
+        
+        lower_val = np.array([0,42,176]) 
+        upper_val = np.array([10,255,255]) 
+        
+        # cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width) # set the Horizontal resolution
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height) # Set the Vertical resolution
+
+        
+        while(cap.isOpened()):
+            ret, frame = cap.read()
+            if ret==True:
+                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+                mask = cv2.inRange(hsv, lower_val, upper_val)
+                hasGreen = np.sum(mask)
+                if hasGreen > mask.size*255/4:
+                    break
+            else:
+                break
+        cap.release()
+        cv2.destroyAllWindows()
+
+
+
+
+
+
     
-    ftime = datetime.datetime.strftime(datetime.datetime.now(), '%Y%m%d_%H%M')
+    # k1 = keithley6485(port='COM11')
+    # k1.connect()
+    # k1.setUp('CURR')
+    
+    # ftime = datetime.datetime.strftime(datetime.datetime.now(), '%Y%m%d_%H%M')
     typ = 'keithley6485__Strommessung'
     name = 'Aquarius_Photometer_Mess'
     vaa = 'Testprobe'
-    _vaa =''
     register = 0
     dt = 1
+
     
-    wdh = 20
-    
-    df = pd.DataFrame()
-    input(f"Nullung erfolgt (Offset: {k1.offs}). Enter um Messungen zu starten...")
+    # df = pd.DataFrame()
+    input("Nullung erfolgt (Offset: {k1.offs}). Enter um Messungen zu starten...")
     try: 
         while True:
-            vaa = input('VAAxxx eingeben ("q" zum beenden, "offset" um neuen Offset zu speichern): ') or "Testprobe"
-            if vaa == _vaa:
-                register +=1
-            else:
-                register = 0
-            _vaa = vaa
-            if vaa =="q":
-                break
-            elif vaa == "offset":
-                k1.setUp('CURR')
-            else:
-                for i in range(10):
-                    try:
-                        h=k1.measure(vaa,register,name)
-                        df = pd.concat([df,h],ignore_index=True)
-                        print(df[['VAAxxx','actVal','Unit', 'Register','check']].tail(1))
-                    except ValueError:
-                        pass
-                    time.sleep(dt)
-    finally:
-        df.to_csv(f'{name}_{ftime}.csv',index=False)
-        k1.close()
+            print('warte auf Trigger durch LRP...')
+            trigger()
+            for i in range(10):
+                try:
+                    print(i)
+                    # h=k1.measure(vaa,register,name)
+                    # df = pd.concat([df,h],ignore_index=True)
+                    # print(df[['VAAxxx','actVal','Unit', 'Register','check']].tail(1))
+                except ValueError:
+                    pass
+                time.sleep(dt)#
+    except: pass
+    # finally:
+        # df.to_csv(f'{name}_{ftime}.csv',index=False)
+        # k1.close()
+        
+        
+        
+        
+### manuell
+    # k1 = keithley6485(port='COM11')
+    # k1.connect()
+    # k1.setUp('CURR')
+    
+    # ftime = datetime.datetime.strftime(datetime.datetime.now(), '%Y%m%d_%H%M')
+    # typ = 'keithley6485__Strommessung'
+    # name = 'Aquarius_Photometer_Mess'
+    # vaa = 'Testprobe'
+    # _vaa =''
+    # register = 0
+    # dt = 1
+    
+    # wdh = 20
+    
+    # df = pd.DataFrame()
+    # input(f"Nullung erfolgt (Offset: {k1.offs}). Enter um Messungen zu starten...")
+    # try: 
+    #     while True:
+    #         vaa = input('VAAxxx eingeben ("q" zum beenden, "offset" um neuen Offset zu speichern): ') or "Testprobe"
+    #         if vaa == _vaa:
+    #             register +=1
+    #         else:
+    #             register = 0
+    #         _vaa = vaa
+    #         if vaa =="q":
+    #             break
+    #         elif vaa == "offset":
+    #             k1.setUp('CURR')
+    #         else:
+    #             for i in range(10):
+    #                 try:
+    #                     h=k1.measure(vaa,register,name)
+    #                     df = pd.concat([df,h],ignore_index=True)
+    #                     print(df[['VAAxxx','actVal','Unit', 'Register','check']].tail(1))
+    #                 except ValueError:
+    #                     pass
+    #                 time.sleep(dt)
+    # finally:
+    #     df.to_csv(f'{name}_{ftime}.csv',index=False)
+    #     k1.close()      
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
         
 # dfh = df[['VAAxxx','actVal','Unit', 'Register','check']]        
 # format_row = "{:>10}" * (len(dfh.columns) +1 )
