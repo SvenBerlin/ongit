@@ -27,6 +27,7 @@ class Presets(Enum):
             ':SYST:ZCH 1\n',
             ':SYST:ZCOR 1\n',
             ':SYST:ZCH 0\n',
+            'INIT\n',
             ':CALC2:NULL:ACQ\n',
             ':CALC2:NULL:STAT 1\n',
             ':SENS:AVER 1\n']
@@ -57,6 +58,7 @@ class keithley6485:
         self.device = 'unknown'
         self.sn = 'unknown'
         self.lastline = ''
+        self.offs = '0.000'
         
         # self.connect()
 
@@ -108,7 +110,7 @@ class keithley6485:
         
     def readErr(self):
         self.send(':SYST:ERR?\n:')
-        self.error = self.read()
+        self.error = self.read().strip()
         self.send('*CLS\n')
         return self.error
         
@@ -134,26 +136,30 @@ class keithley6485:
         curr = curr.split(',')
         
         typ = 'keithley6485__Strommessung'
-        actVal = float(curr[0][:-1])
+        rawactVal = float(curr[0][:-1])
+        actVal= rawactVal - self.offs
         unit = curr[0][-1]
         t = self.time + datetime.timedelta(seconds=float(curr[1]))
         
-        cols=['Type','name','VAAxxx','DateTime','actVal','Unit','check','Register','sn']
-        dat = [typ, name, vaa, t, actVal, unit, self.readErr(), register, self.sn]
+        cols=['Type','name','VAAxxx','DateTime','actVal','Unit','rawactVal','offsetactVal','check','Register','sn']
+        dat = [typ, name, vaa, t, actVal, unit,rawactVal,float(self.offs), self.readErr(), register, self.sn]
         df=pd.DataFrame(data=dat).T
         df.columns=cols
         return df
 
-    
+    def getOffset(self):
+        pass
+
     def reset(self):
        self.send(':SYST:PRES\n')
        self.resetTimer()
      
-    def setUp(self, preset):
+    def setUp(self, preset,):
         for setting in Presets[preset].value:
             self.send(setting)
             time.sleep(0.2)
-    
+        self.send('CALC2:NULL:OFFS?\n')
+        self.offs = float(self.read())
     def close(self):
         if self.connected:
             self.send(':SYST:LOC\n')
@@ -167,28 +173,45 @@ class keithley6485:
             
 if __name__ == '__main__':
     
-    k1 = keithley6485()
+    k1 = keithley6485(port='COM11')
     k1.connect()
     k1.setUp('CURR')
-
+    
+    ftime = datetime.datetime.strftime(datetime.datetime.now(), '%Y%m%d_%H%M')
     typ = 'keithley6485__Strommessung'
     name = 'Aquarius_Photometer_Mess'
     vaa = 'Testprobe'
-   
+    _vaa =''
+    register = 0
     dt = 1
     
+    wdh = 20
+    
     df = pd.DataFrame()
+    input(f"Nullung erfolgt (Offset: {k1.offs}). Enter um Messungen zu starten...")
     try: 
-        for register in range(10):
-            try:
-                h=k1.measure(vaa,register,name)
-                df = pd.concat([df,h],ignore_index=True)
-                print(df[['VAAxxx','actVal','Unit', 'Register','check']].tail(1))
-
-            except ValueError:
-                pass
-            time.sleep(dt)
+        while True:
+            vaa = input('VAAxxx eingeben ("q" zum beenden, "offset" um neuen Offset zu speichern): ') or "Testprobe"
+            if vaa == _vaa:
+                register +=1
+            else:
+                register = 0
+            _vaa = vaa
+            if vaa =="q":
+                break
+            elif vaa == "offset":
+                k1.setUp('CURR')
+            else:
+                for i in range(10):
+                    try:
+                        h=k1.measure(vaa,register,name)
+                        df = pd.concat([df,h],ignore_index=True)
+                        print(df[['VAAxxx','actVal','Unit', 'Register','check']].tail(1))
+                    except ValueError:
+                        pass
+                    time.sleep(dt)
     finally:
+        df.to_csv(f'{name}_{ftime}.csv',index=False)
         k1.close()
         
 # dfh = df[['VAAxxx','actVal','Unit', 'Register','check']]        
@@ -208,20 +231,46 @@ if __name__ == '__main__':
 # VAAxxx = Probe
 # 
 
-   
+# rawactVal
+# offsetactVal
+# actVal
+
     
 # k1.send('SYST:KEY 16\n')
 # k1.send('SYST:KEY 8\n')
-# k1.send('SYST:KEY 7\n')
 # k1.send('SYST:KEY 2\n')
+# CURR = [':CONF:CURR\n', #sets up device to measure current
+#             ':SYST:ZCH 1\n',
+#             ':SYST:ZCOR 1\n',
+#             ':SYST:ZCH 0\n',
+#             ':CALC2:NULL:ACQ\n',
+#             ':CALC2:NULL:STAT 1\n',
+#             ':SENS:AVER 1\n']
 
-# k1.send('SYST:PRES\n')
+
+# k1.send('SYST:KEY 7\n')
+# k1.send(':CONF:CURR\n')
 # k1.send('SYST:ZCH 1\n')
 # k1.send('SYST:ZCOR 1\n')
 # k1.send('SYST:ZCH 0\n')
 # k1.send('CALC2:NULL:ACQ\n')
-# k1.send('CALC2:NULL:STAT 1\n')
-# k1.send('SENS:MED 1\n')
+# k1.send('CALC2:NULL:STAT 0\n')
+# k1.send(':SENS:AVER 1\n')
+
+
+# k1.send(':READ?\n')
+# k1.send('*CLS\n')
+# offs = k1.read()
+# offs = offs.split(',')
+# offs = offs[0][:-1]
+# if offs[0] == '+': offs = offs[1:]
+# k1.send(f'CALC2:NULL:OFFS {offs}\n')
+# k1.send('CALC2:NULL:OFFS?\n')
+# k1.send('CALC2:NULL:STAT?\n')
+# k1.send('CALC2:FEED SENS\n')
+# k1.send('INIT\n')
+# k1.send('CALC2:DATA?\n')
+
 
 # k1.send('SYST:ZCOR:ACQ\n')
 # k1.send('CONF:CURR\n')
