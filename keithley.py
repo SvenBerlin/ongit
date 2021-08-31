@@ -148,7 +148,12 @@ class keithley6485:
         return df
 
     def getOffset(self):
-        pass
+        self.send('INIT\n')
+        time.sleep(0.2)
+        self.send(':CALC2:NULL:ACQ\n')
+        time.sleep(0.2)
+        self.send('CALC2:NULL:OFFS?\n')
+        self.offs = float(self.read())
 
     def reset(self):
        self.send(':SYST:PRES\n')
@@ -179,23 +184,27 @@ if __name__ == '__main__':
     def trigger():
         width=1920
         height=1080
+        fsize = 200
         
-        lower_val = np.array([0,42,176]) 
-        upper_val = np.array([10,255,255]) 
+        lower_val = np.array([146,44,176]) 
+        upper_val = np.array([177,255,255]) 
+        # lower_val = np.array([0,42,176]) 
+        # upper_val = np.array([10,255,255]) 
         
         # cap = cv2.VideoCapture(0)
-        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, width) # set the Horizontal resolution
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height) # Set the Vertical resolution
 
         
         while(cap.isOpened()):
             ret, frame = cap.read()
+            frame = frame[int(height/2-fsize):int(height/2+fsize),int(width/2-fsize):int(width/2+fsize)]
             if ret==True:
                 hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
                 mask = cv2.inRange(hsv, lower_val, upper_val)
-                hasGreen = np.sum(mask)
-                if hasGreen > mask.size*255/4:
+                hasColor = np.sum(mask)
+                if hasColor > mask.size*255/4:
                     break
             else:
                 break
@@ -208,37 +217,47 @@ if __name__ == '__main__':
 
 
     
-    # k1 = keithley6485(port='COM11')
-    # k1.connect()
-    # k1.setUp('CURR')
+    k1 = keithley6485(port='COM11')
+    k1.connect()
+    k1.setUp('CURR')
     
-    # ftime = datetime.datetime.strftime(datetime.datetime.now(), '%Y%m%d_%H%M')
+    ftime = datetime.datetime.strftime(datetime.datetime.now(), '%Y%m%d_%H%M')
     typ = 'keithley6485__Strommessung'
-    name = 'Aquarius_Photometer_Mess'
+    basename = 'AQ_Photometer'
     vaa = 'Testprobe'
     register = 0
-    dt = 1
+    dt = 0.1
+    cnt = 1
 
     
-    # df = pd.DataFrame()
-    input("Nullung erfolgt (Offset: {k1.offs}). Enter um Messungen zu starten...")
+    df = pd.DataFrame()
+    input(f"Offset (Keithley): {k1.offs}. Enter um Messungen zu starten...")
     try: 
         while True:
             print('warte auf Trigger durch LRP...')
             trigger()
-            for i in range(10):
+            
+            if cnt%2 != 0:
+                name = f'{basename}_NULL'
+                print(f'Offset (Keithley): {k1.offs}\n{name}')
+                k1.getOffset()
+            else:
+                name = f'{basename}_MESS_{int(cnt/2)}'
+                print(name)
+            for register in range(10):
                 try:
-                    print(i)
-                    # h=k1.measure(vaa,register,name)
-                    # df = pd.concat([df,h],ignore_index=True)
-                    # print(df[['VAAxxx','actVal','Unit', 'Register','check']].tail(1))
+                    # print(register)
+                    h=k1.measure(vaa,register,name)
+                    df = pd.concat([df,h],ignore_index=True)
+                    print(df[['VAAxxx','actVal','Unit', 'Register','check']].tail(1))
                 except ValueError:
                     pass
                 time.sleep(dt)#
+            cnt += 1
     except: pass
-    # finally:
-        # df.to_csv(f'{name}_{ftime}.csv',index=False)
-        # k1.close()
+    finally:
+        df.to_csv(f'{basename}_{ftime}.csv',index=False)
+        k1.close()
         
         
         
